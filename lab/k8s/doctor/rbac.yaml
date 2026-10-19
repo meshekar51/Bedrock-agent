@@ -1,0 +1,40 @@
+# The doctor may LOOK at pods, logs and events in namespace demo. Nothing else, no Secrets.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bedrock-lab
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-doctor
+  namespace: bedrock-lab
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: k8s-doctor-readonly
+  namespace: demo
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, events]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: k8s-doctor-readonly
+  namespace: demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: k8s-doctor-readonly
+subjects:
+  - kind: ServiceAccount
+    name: k8s-doctor
+    namespace: bedrock-lab

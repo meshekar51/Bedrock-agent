@@ -1,0 +1,68 @@
+# Namespace "demo": one healthy app and three apps broken on purpose.
+#   web          healthy nginx
+#   checkout     exits 1: env var DATABASE_URL missing         -> CrashLoopBackOff
+#   oom-app      allocates ~200MB with a 64Mi memory limit      -> OOMKilled
+#   bad-image    image tag that does not exist                  -> ImagePullBackOff
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: demo}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: web}}
+  template:
+    metadata: {labels: {app: web}}
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          ports: [{containerPort: 80}]
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: checkout, namespace: demo}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: checkout}}
+  template:
+    metadata: {labels: {app: checkout}}
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["sh", "-c", "echo 'starting checkout v2.3.1'; if [ -z \"$DATABASE_URL\" ]; then echo 'FATAL: required environment variable DATABASE_URL is not set'; exit 1; fi; sleep 3600"]
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: oom-app, namespace: demo}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: oom-app}}
+  template:
+    metadata: {labels: {app: oom-app}}
+    spec:
+      containers:
+        - name: worker
+          image: python:3.12-slim
+          command: ["python", "-c", "print('loading report cache', flush=True); data = b'x' * (200 * 1024 * 1024); print('cache loaded', flush=True)"]
+          resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: bad-image, namespace: demo}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: bad-image}}
+  template:
+    metadata: {labels: {app: bad-image}}
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.99.99-doesnotexist
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}

@@ -1,0 +1,43 @@
+# Proves the chain: pod -> EC2 metadata service (IMDSv2) -> instance role -> Bedrock Claude.
+#   kubectl apply -f k8s/01-bedrock-smoke.yaml
+#   kubectl -n bedrock-lab logs -f bedrock-smoke
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bedrock-lab
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bedrock-smoke
+  namespace: bedrock-lab
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  containers:
+    - name: smoke
+      image: python:3.12-slim
+      env:
+        - {name: AWS_REGION, value: eu-central-1}
+        - {name: MODEL_ID, value: eu.anthropic.claude-sonnet-5-5}
+        - {name: AWS_METADATA_SERVICE_TIMEOUT, value: "5"}        # give IMDS time to answer from inside kind
+        - {name: AWS_METADATA_SERVICE_NUM_ATTEMPTS, value: "3"}
+      command: ["sh", "-c"]
+      args:
+        - |
+          pip install --quiet --root-user-action=ignore boto3==1.43.114 && python - <<'EOF'
+          import os, boto3
+          arn = boto3.client("sts").get_caller_identity()["Arn"]
+          print("identity:", arn)
+          resp = boto3.client("bedrock-runtime").converse(
+              modelId=os.environ["MODEL_ID"],
+              messages=[{"role": "user", "content": [{"text": "In one sentence: what is a Kubernetes pod?"}]}],
+              inferenceConfig={"maxTokens": 120},
+          )
+          print("claude:", resp["output"]["message"]["content"][0]["text"])
+          print("tokens:", resp["usage"])
+          print("BEDROCK SMOKE TEST PASSED")
+          EOF
+      resources:
+        requests: {cpu: 50m, memory: 128Mi}
+        limits: {memory: 256Mi}

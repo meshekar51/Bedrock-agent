@@ -1,0 +1,12 @@
+# kubectl -n bedrock-lab delete job k8s-doctor --ignore-not-found
+# kubectl apply -k k8s/doctor
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - rbac.yaml
+  - job.yaml
+configMapGenerator:
+  - name: k8s-doctor-script
+    namespace: bedrock-lab
+    files:
+      - doctor.py

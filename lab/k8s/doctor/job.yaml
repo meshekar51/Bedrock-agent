@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k8s-doctor
+  namespace: bedrock-lab
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: k8s-doctor
+      restartPolicy: Never
+      containers:
+        - name: doctor
+          image: python:3.12-slim
+          command: ["sh", "-c"]
+          args:
+            - pip install --quiet --root-user-action=ignore boto3==1.43.114 kubernetes==37.0.1 && python /app/doctor.py
+          env:
+            - {name: TARGET_NAMESPACE, value: demo}
+            - {name: AWS_REGION, value: eu-central-1}
+            - {name: MODEL_ID, value: eu.anthropic.claude-sonnet-5-5}
+            - {name: AWS_METADATA_SERVICE_TIMEOUT, value: "5"}
+            - {name: AWS_METADATA_SERVICE_NUM_ATTEMPTS, value: "3"}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 384Mi}
+          volumeMounts:
+            - {name: script, mountPath: /app}
+      volumes:
+        - name: script
+          configMap: {name: k8s-doctor-script}
